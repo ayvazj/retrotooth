@@ -107,73 +107,139 @@ public class GattCall {
      * call was canceled.
      */
     byte[] getResponse(final Request request) {
-
         switch (request.bluetoothOperation()) {
             case READ:
-                final RetrotoothFuture future = new RetrotoothFuture();
-                retrotoothGattCallback.setPassthruListener(new BluetoothGattCallback() {
-                    @Override
-                    public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-                        super.onServicesDiscovered(gatt, status);
-                        if (BluetoothGatt.GATT_SUCCESS == status) {
-                            BluetoothGattService service = gatt.getService(request.service());
-                            if (service == null) {
-                                throw new IllegalStateException("service(" + request.service() + ") not found");
-                            }
-                            BluetoothGattCharacteristic characteristic = service.getCharacteristic(request.characteristic());
-                            if (characteristic == null) {
-                                throw new IllegalStateException("characteristic(" + request.characteristic() + ") not found on service(" + request.service() + ")");
-                            }
-                            gatt.setCharacteristicNotification(characteristic, true);
-                            gatt.readCharacteristic(characteristic);
-                        }
-                    }
-
-                    @Override
-                    public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-                        super.onCharacteristicRead(gatt, characteristic, status);
-                        if (BluetoothGatt.GATT_SUCCESS == status && characteristic.getUuid().equals(request.characteristic())) {
-                            future.onCharacteristicRead(characteristic);
-                        }
-                    }
-                });
-                BluetoothGattService service = client.getService(request.service());
-                if (service == null) {
-                    if (!client.discoverServices()) {
-                        throw new IllegalStateException("discover services failed");
-                    }
-                } else {
-                    BluetoothGattCharacteristic characteristic = service.getCharacteristic(request.characteristic());
-                    if (characteristic == null) {
-                        throw new IllegalStateException("characteristic(" + request.characteristic() + ") not found on service(" + request.service() + ")");
-                    }
-                    client.setCharacteristicNotification(characteristic, true);
-                    client.readCharacteristic(characteristic);
-                }
-
-                try {
-                    BluetoothGattCharacteristic characteristic = future.get();
-                    if (characteristic == null) {
-                        throw new IllegalStateException("characteristic(" + request.characteristic() + ") is null.  Try resetting your bluetooth adapter");
-                    }
-                    if (characteristic.getValue() == null || characteristic.getValue().length == 0) {
-                        // empty response, this can happen if the charactersitic has no value
-                        return new byte[]{};
-                    }
-                    System.out.println(">>>>>>>>>>>> characteristic.getValue() => " + characteristic.getValue()[0]);
-                    return characteristic.getValue();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
-                    e.printStackTrace();
-                }
-                break;
+                return doRead(request);
+            case WRITE:
+                return doWrite(request);
             default:
                 break;
         }
         return null;
     }
 
+    private byte[] doRead(final Request request) {
+        final RetrotoothFuture future = new RetrotoothFuture();
+        retrotoothGattCallback.setPassthruListener(new BluetoothGattCallback() {
+            @Override
+            public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+                super.onServicesDiscovered(gatt, status);
+                if (BluetoothGatt.GATT_SUCCESS == status) {
+                    BluetoothGattService service = gatt.getService(request.service());
+                    if (service == null) {
+                        throw new IllegalStateException("service(" + request.service() + ") not found");
+                    }
+                    BluetoothGattCharacteristic characteristic = service.getCharacteristic(request.characteristic());
+                    if (characteristic == null) {
+                        throw new IllegalStateException("characteristic(" + request.characteristic() + ") not found on service(" + request.service() + ")");
+                    }
+                    gatt.setCharacteristicNotification(characteristic, true);
+                    gatt.readCharacteristic(characteristic);
+                }
+            }
+
+            @Override
+            public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+                super.onCharacteristicRead(gatt, characteristic, status);
+                if (BluetoothGatt.GATT_SUCCESS == status && characteristic.getUuid().equals(request.characteristic())) {
+                    future.onCharacteristicRead(characteristic);
+                }
+            }
+        });
+        BluetoothGattService service = client.getService(request.service());
+        if (service == null) {
+            if (!client.discoverServices()) {
+                throw new IllegalStateException("discover services failed");
+            }
+        } else {
+            BluetoothGattCharacteristic characteristic = service.getCharacteristic(request.characteristic());
+            if (characteristic == null) {
+                throw new IllegalStateException("characteristic(" + request.characteristic() + ") not found on service(" + request.service() + ")");
+            }
+            client.setCharacteristicNotification(characteristic, true);
+            client.readCharacteristic(characteristic);
+        }
+
+        try {
+            BluetoothGattCharacteristic characteristic = future.get();
+            if (characteristic == null) {
+                throw new IllegalStateException("characteristic(" + request.characteristic() + ") is null.  Try resetting your bluetooth adapter");
+            }
+            if (characteristic.getValue() == null || characteristic.getValue().length == 0) {
+                // empty response, this can happen if the charactersitic has no value
+                return new byte[]{};
+            }
+            Internal.logger.log(Level.INFO, "characteristic.getValue() " + characteristic.getValue()[0]);
+            return characteristic.getValue();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private byte[] doWrite(final Request request) {
+        final RetrotoothFuture future = new RetrotoothFuture();
+        retrotoothGattCallback.setPassthruListener(new BluetoothGattCallback() {
+            @Override
+            public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+                super.onServicesDiscovered(gatt, status);
+                if (BluetoothGatt.GATT_SUCCESS == status) {
+                    BluetoothGattService service = gatt.getService(request.service());
+                    if (service == null) {
+                        throw new IllegalStateException("service(" + request.service() + ") not found");
+                    }
+                    BluetoothGattCharacteristic characteristic = service.getCharacteristic(request.characteristic());
+                    if (characteristic == null) {
+                        throw new IllegalStateException("characteristic(" + request.characteristic() + ") not found on service(" + request.service() + ")");
+                    }
+                    gatt.setCharacteristicNotification(characteristic, true);
+                    characteristic.setValue(new byte[] { 0x03 });
+                    gatt.writeCharacteristic(characteristic);
+                }
+            }
+
+            @Override
+            public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+                super.onCharacteristicWrite(gatt, characteristic, status);
+                if (BluetoothGatt.GATT_SUCCESS == status && characteristic.getUuid().equals(request.characteristic())) {
+                    future.onCharacteristicWrite(characteristic);
+                }
+            }
+        });
+        BluetoothGattService service = client.getService(request.service());
+        if (service == null) {
+            if (!client.discoverServices()) {
+                throw new IllegalStateException("discover services failed");
+            }
+        } else {
+            BluetoothGattCharacteristic characteristic = service.getCharacteristic(request.characteristic());
+            if (characteristic == null) {
+                throw new IllegalStateException("characteristic(" + request.characteristic() + ") not found on service(" + request.service() + ")");
+            }
+            client.setCharacteristicNotification(characteristic, true);
+            client.writeCharacteristic(characteristic);
+        }
+
+        try {
+            BluetoothGattCharacteristic characteristic = future.get();
+            if (characteristic == null) {
+                throw new IllegalStateException("characteristic(" + request.characteristic() + ") is null.  Try resetting your bluetooth adapter");
+            }
+            if (characteristic.getValue() == null || characteristic.getValue().length == 0) {
+                // empty response, this can happen if the charactersitic has no value
+                return new byte[]{};
+            }
+            Internal.logger.log(Level.INFO, "characteristic.getValue() " + characteristic.getValue()[0]);
+            return characteristic.getValue();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
 
     class RetrotoothFuture implements Future<BluetoothGattCharacteristic> {
 
@@ -225,6 +291,10 @@ public class GattCall {
             countDownLatch.countDown();
         }
 
+        public void onCharacteristicWrite(final BluetoothGattCharacteristic characteristic) {
+            this.characteristic = characteristic;
+            countDownLatch.countDown();
+        }
     }
 }
 

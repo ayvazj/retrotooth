@@ -18,23 +18,16 @@ package com.example.android.bluetoothlegatt;
 
 import android.app.Activity;
 import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattService;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.Bundle;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.ExpandableListView;
-import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.github.ayvazj.retrotooth.sample.R;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 
 import retrotooth.Call;
 import retrotooth.Callback;
@@ -57,7 +50,6 @@ public class DeviceControlActivity extends Activity {
     private TextView mDataField;
     private String mDeviceName;
     private String mDeviceAddress;
-    private ExpandableListView mGattServicesList;
 
     private ArrayList<ArrayList<BluetoothGattCharacteristic>> mGattCharacteristics =
             new ArrayList<ArrayList<BluetoothGattCharacteristic>>();
@@ -105,7 +97,6 @@ public class DeviceControlActivity extends Activity {
     private HeartRateService service;
 
     private void clearUI() {
-        mGattServicesList.setAdapter((SimpleExpandableListAdapter) null);
         mDataField.setText(R.string.no_data);
     }
 
@@ -120,10 +111,45 @@ public class DeviceControlActivity extends Activity {
 
         // Sets up UI references.
         ((TextView) findViewById(R.id.device_address)).setText(mDeviceAddress);
-        mGattServicesList = (ExpandableListView) findViewById(R.id.gatt_services_list);
-        mGattServicesList.setOnChildClickListener(servicesListClickListner);
         mConnectionState = (TextView) findViewById(R.id.connection_state);
         mDataField = (TextView) findViewById(R.id.data_value);
+
+        findViewById(R.id.read).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Call<String> call = service.getBodySensorLocation();
+                call.enqueue(new Callback<String>() {
+                    @Override
+                    public void onResponse(Response<String> response) {
+                        Toast.makeText(DeviceControlActivity.this, "READ onResponse => ", Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onFailure(Throwable t) {
+                        Toast.makeText(DeviceControlActivity.this, "READ onFailure", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
+
+        findViewById(R.id.write).setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View view) {
+                Call<Void> call = service.setHeartRateControlPoint();
+                call.enqueue(new Callback<Void>() {
+                    @Override
+                    public void onResponse(Response<Void> response) {
+                        Toast.makeText(DeviceControlActivity.this, "WRITE onResponse => ", Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onFailure(Throwable t) {
+                        Toast.makeText(DeviceControlActivity.this, "WRITE onFailure", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
 
         getActionBar().setTitle(mDeviceName);
         getActionBar().setDisplayHomeAsUpEnabled(true);
@@ -133,6 +159,7 @@ public class DeviceControlActivity extends Activity {
     protected void onResume() {
         super.onResume();
         mRetrotooth = new Retrotooth.Builder().with(this).device(mDeviceAddress).build();
+        mRetrotooth.connect();
         service = mRetrotooth.create(HeartRateService.class);
     }
 
@@ -140,126 +167,5 @@ public class DeviceControlActivity extends Activity {
     protected void onPause() {
         super.onPause();
         mRetrotooth.close();
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.gatt_services, menu);
-        if (mConnected) {
-            menu.findItem(R.id.menu_connect).setVisible(false);
-            menu.findItem(R.id.menu_disconnect).setVisible(true);
-        } else {
-            menu.findItem(R.id.menu_connect).setVisible(true);
-            menu.findItem(R.id.menu_disconnect).setVisible(false);
-        }
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.menu_connect:
-                Call<String> call = service.getBodySensorLocation();
-                call.enqueue(new Callback<String>() {
-                    @Override
-                    public void onResponse(Response<String> response) {
-                        Toast.makeText(DeviceControlActivity.this, "onResponse", Toast.LENGTH_SHORT).show();
-                    }
-
-                    @Override
-                    public void onFailure(Throwable t) {
-                        Toast.makeText(DeviceControlActivity.this, "onFailure", Toast.LENGTH_SHORT).show();
-                    }
-                });
-                return true;
-            case R.id.menu_disconnect:
-                //service.disconnect();
-                return true;
-            case android.R.id.home:
-                onBackPressed();
-                return true;
-        }
-        return super.onOptionsItemSelected(item);
-    }
-
-    private void updateConnectionState(final int resourceId) {
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                mConnectionState.setText(resourceId);
-            }
-        });
-    }
-
-    private void displayData(String data) {
-        if (data != null) {
-            mDataField.setText(data);
-        }
-    }
-
-    // Demonstrates how to iterate through the supported GATT Services/Characteristics.
-    // In this sample, we populate the data structure that is bound to the ExpandableListView
-    // on the UI.
-    private void displayGattServices(List<BluetoothGattService> gattServices) {
-        if (gattServices == null) return;
-        String uuid = null;
-        String unknownServiceString = getResources().getString(R.string.unknown_service);
-        String unknownCharaString = getResources().getString(R.string.unknown_characteristic);
-        ArrayList<HashMap<String, String>> gattServiceData = new ArrayList<HashMap<String, String>>();
-        ArrayList<ArrayList<HashMap<String, String>>> gattCharacteristicData
-                = new ArrayList<ArrayList<HashMap<String, String>>>();
-        mGattCharacteristics = new ArrayList<ArrayList<BluetoothGattCharacteristic>>();
-
-        // Loops through available GATT Services.
-        for (BluetoothGattService gattService : gattServices) {
-            HashMap<String, String> currentServiceData = new HashMap<String, String>();
-            uuid = gattService.getUuid().toString();
-            currentServiceData.put(
-                    LIST_NAME, SampleGattAttributes.lookup(uuid, unknownServiceString));
-            currentServiceData.put(LIST_UUID, uuid);
-            gattServiceData.add(currentServiceData);
-
-            ArrayList<HashMap<String, String>> gattCharacteristicGroupData =
-                    new ArrayList<HashMap<String, String>>();
-            List<BluetoothGattCharacteristic> gattCharacteristics =
-                    gattService.getCharacteristics();
-            ArrayList<BluetoothGattCharacteristic> charas =
-                    new ArrayList<BluetoothGattCharacteristic>();
-
-            // Loops through available Characteristics.
-            for (BluetoothGattCharacteristic gattCharacteristic : gattCharacteristics) {
-                charas.add(gattCharacteristic);
-                HashMap<String, String> currentCharaData = new HashMap<String, String>();
-                uuid = gattCharacteristic.getUuid().toString();
-                currentCharaData.put(
-                        LIST_NAME, SampleGattAttributes.lookup(uuid, unknownCharaString));
-                currentCharaData.put(LIST_UUID, uuid);
-                gattCharacteristicGroupData.add(currentCharaData);
-            }
-            mGattCharacteristics.add(charas);
-            gattCharacteristicData.add(gattCharacteristicGroupData);
-        }
-
-        SimpleExpandableListAdapter gattServiceAdapter = new SimpleExpandableListAdapter(
-                this,
-                gattServiceData,
-                android.R.layout.simple_expandable_list_item_2,
-                new String[]{LIST_NAME, LIST_UUID},
-                new int[]{android.R.id.text1, android.R.id.text2},
-                gattCharacteristicData,
-                android.R.layout.simple_expandable_list_item_2,
-                new String[]{LIST_NAME, LIST_UUID},
-                new int[]{android.R.id.text1, android.R.id.text2}
-        );
-        mGattServicesList.setAdapter(gattServiceAdapter);
-    }
-
-    private static IntentFilter makeGattUpdateIntentFilter() {
-        final IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECTED);
-        intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
-        intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
-        intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
-        return intentFilter;
     }
 }

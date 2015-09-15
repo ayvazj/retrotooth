@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 import retrotooth.annotations.READ;
+import retrotooth.annotations.WRITE;
 import retrotooth.util.BleUtils;
 
 import static retrotooth.Utils.methodError;
@@ -51,6 +52,9 @@ final class RequestFactoryParser {
             if (annotation instanceof READ) {
                 parseBluetoothOperation(BluetoothOperation.READ, ((READ) annotation), false);
             }
+            else if (annotation instanceof WRITE) {
+                parseBluetoothOperation(BluetoothOperation.WRITE, ((WRITE) annotation), false);
+            }
         }
         if (bluetoothOperation == null) {
             throw methodError(method, "BLE method annotation is required (e.g., @READ, @WRITE, etc.).");
@@ -80,6 +84,31 @@ final class RequestFactoryParser {
         
         this.serviceUuid = BleUtils.getUUID(read.service());
         this.characteristicUuid = BleUtils.getUUID(read.characteristic());
+    }
+
+    private void parseBluetoothOperation(BluetoothOperation bluetoothOperation, WRITE write, boolean hasBody) {
+        if (this.bluetoothOperation != null) {
+            throw methodError(method, "Only one BLE operation method is allowed. Found: %s and %s.",
+                    this.bluetoothOperation, bluetoothOperation);
+        }
+        if (write == null) {
+            throw methodError(method, "write == null",
+                    this.bluetoothOperation, bluetoothOperation);
+        }
+
+        this.bluetoothOperation = bluetoothOperation;
+        this.hasBody = hasBody;
+
+        if (write.service() == null || write.service().isEmpty()) {
+            throw methodError(method, "\"%s\" must have a service value defined.", this.bluetoothOperation);
+        }
+
+        if (write.characteristic() == null || write.characteristic().isEmpty()) {
+            throw methodError(method, "\"%s\" must have a characteristic value defined.", this.bluetoothOperation);
+        }
+
+        this.serviceUuid = BleUtils.getUUID(write.service());
+        this.characteristicUuid = BleUtils.getUUID(write.characteristic());
     }
 
     private void parseParameters(Converter.Factory converterFactory) {

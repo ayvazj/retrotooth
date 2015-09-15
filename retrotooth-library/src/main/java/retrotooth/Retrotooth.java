@@ -45,7 +45,6 @@ public final class Retrotooth {
         this.adapterFactory = adapterFactory;
         this.callbackExecutor = callbackExecutor;
         this.retrotoothGattCallback = new RetrotoothGattCallback();
-        this.client = connect();
     }
 
     //region Inspect interface using reflection
@@ -84,8 +83,9 @@ public final class Retrotooth {
     }
     //endregion
 
-    private BluetoothGatt connect() {
-        return bluetoothDevice.connectGatt(this.context, false, this.retrotoothGattCallback);
+    public BluetoothGatt connect() {
+        this.client = bluetoothDevice.connectGatt(this.context, false, this.retrotoothGattCallback);
+        return this.client;
     }
 
 
