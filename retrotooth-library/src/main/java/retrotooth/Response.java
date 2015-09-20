@@ -1,29 +1,55 @@
 package retrotooth;
 
-import java.io.Closeable;
-import java.io.IOException;
 
-public class Response<T> implements Closeable {
+import static retrotooth.Utils.checkNotNull;
 
-    private final byte[] data;
-    private final T content;
+public final class Response<T> {
 
-    public Response(byte[] data, T content, Object o) {
+    /**
+     * TODO
+     */
+    public static <T> Response<T> success(T body, byte[] rawResponse) {
+        return new Response<>(rawResponse, body, null, true);
+    }
+
+    /**
+     * TODO
+     */
+    public static <T> Response<T> error(ResponseData body, byte[] rawResponse) {
+        return new Response<>(rawResponse, null, body, false);
+    }
+
+    private final byte[] rawResponse;
+    private final T data;
+    private final ResponseData errorBody;
+    private final boolean isSuccess;
+
+    private Response(byte[] rawResponse, T data, ResponseData errorBody, boolean isSuccess) {
+        this.rawResponse = checkNotNull(rawResponse, "rawResponse == null");
         this.data = data;
-        this.content = content;
+        this.errorBody = errorBody;
+        this.isSuccess = isSuccess;
     }
 
-    public Response(byte[] data) {
-        this.data = data;
-        this.content = null; // TODO parse data
+    public byte[] raw() {
+        return rawResponse;
     }
 
-    public static <T> Response<T> success(T content, byte[] data) {
-        return new Response<>(data, content, null);
+    public boolean isSuccess() {
+        return isSuccess;
     }
 
-    @Override
-    public void close() throws IOException {
+    /**
+     * The deserialized response data of a {@linkplain #isSuccess() successful} response.
+     */
+    public T data() {
+        return data;
+    }
 
+    /**
+     * The raw response data of an {@linkplain #isSuccess() unsuccessful} response.
+     */
+    public ResponseData errorBody() {
+        return errorBody;
     }
 }

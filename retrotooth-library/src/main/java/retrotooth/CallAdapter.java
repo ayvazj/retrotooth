@@ -1,5 +1,6 @@
 package retrotooth;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 
 public interface CallAdapter<T> {
@@ -13,11 +14,8 @@ public interface CallAdapter<T> {
      */
     Type responseType();
 
-    /**
-     * Returns an instance of the {@code returnType}, the same type originally passed to {@link
-     * Factory#get} used to create this instance.
-     */
-    Object adapt(Call<T> call);
+    /** Returns an instance of the {@code T} which adapts the execution of {@code call}. */
+    <R> T adapt(Call<R> call);
 
     interface Factory {
 
@@ -25,6 +23,6 @@ public interface CallAdapter<T> {
          * Returns a call adapter for calls that return {@code returnType}, or null if this factory
          * doesn't adapt that type.
          */
-        CallAdapter<?> get(Type returnType);
+        CallAdapter<?> get(Type returnType, Annotation[] annotations);
     }
 }

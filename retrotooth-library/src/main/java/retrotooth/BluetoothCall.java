@@ -8,7 +8,7 @@ import java.io.IOException;
 final class BluetoothCall<T> implements Call<T> {
     private final BluetoothGatt client;
     private final RequestFactory requestFactory;
-    private final Converter<T> responseConverter;
+    private final Converter<ResponseData, T> responseConverter;
     private final RetrotoothGattCallback retrotoothGattCallback;
     private final Object[] args;
 
@@ -16,7 +16,7 @@ final class BluetoothCall<T> implements Call<T> {
     private volatile boolean canceled;
     private GattCall rawCall;
 
-    BluetoothCall(BluetoothGatt client, RequestFactory requestFactory, Converter<T> responseConverter,
+    BluetoothCall(BluetoothGatt client, RequestFactory requestFactory, Converter<ResponseData, T> responseConverter,
                   RetrotoothGattCallback retrotoothGattCallback, Object[] args) {
         this.client = client;
         this.requestFactory = requestFactory;
@@ -108,9 +108,9 @@ final class BluetoothCall<T> implements Call<T> {
     }
 
     private Response<T> parseResponse(byte[] data) throws IOException {
-        ExceptionCatchingRequestBody catchingBody = new ExceptionCatchingRequestBody(data);
+        ExceptionCatchingRequestBody catchingBody = new ExceptionCatchingRequestBody(ResponseData.create(null, data));
         try {
-            T resp = responseConverter.fromResponse(new Response<T>(data));
+            T resp = responseConverter.convert(catchingBody);
             return Response.success(resp, data);
         } catch (RuntimeException e) {
             // If the underlying source threw an exception, propagate that rather than indicating it was

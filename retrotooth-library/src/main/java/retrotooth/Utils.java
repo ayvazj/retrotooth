@@ -3,6 +3,7 @@ package retrotooth;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
@@ -12,9 +13,13 @@ import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
 import java.nio.Buffer;
+import java.nio.charset.Charset;
 import java.util.Arrays;
+import java.util.List;
 
 final public class Utils {
+    public static final Charset UTF_8 = Charset.forName("UTF-8");
+
     static <T> T checkNotNull(T object, String message) {
         if (object == null) {
             throw new NullPointerException(message);
@@ -30,22 +35,71 @@ final public class Utils {
         }
     }
 
+    public static void checkOffsetAndCount(long arrayLength, long offset, long count) {
+        if ((offset | count) < 0L || offset > arrayLength || arrayLength - offset < count) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
+    }
+
     /**
-     * Replace a {@link Response} with an identical copy whose body is backed by a
+     * Returns true if {@code annotations} contains an instance of {@code cls}.
+     */
+    static boolean isAnnotationPresent(Annotation[] annotations,
+                                       Class<? extends Annotation> cls) {
+        for (Annotation annotation : annotations) {
+            if (cls.isInstance(annotation)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static CallAdapter<?> resolveCallAdapter(List<CallAdapter.Factory> adapterFactories, Type type,
+                                             Annotation[] annotations) {
+        for (int i = 0, count = adapterFactories.size(); i < count; i++) {
+            CallAdapter<?> adapter = adapterFactories.get(i).get(type, annotations);
+            if (adapter != null) {
+                return adapter;
+            }
+        }
+
+        StringBuilder builder = new StringBuilder("Could not locate call adapter for ")
+                .append(type)
+                .append(". Tried:");
+        for (CallAdapter.Factory adapterFactory : adapterFactories) {
+            builder.append("\n * ").append(adapterFactory.getClass().getName());
+        }
+        throw new IllegalArgumentException(builder.toString());
+    }
+
+    static Converter<ResponseData, ?> resolveResponseBodyConverter(
+            List<Converter.Factory> converterFactories, Type type, Annotation[] annotations) {
+        for (int i = 0, count = converterFactories.size(); i < count; i++) {
+            Converter<ResponseData, ?> converter =
+                    converterFactories.get(i).fromResponseBody(type, annotations);
+            if (converter != null) {
+                return converter;
+            }
+        }
+
+        StringBuilder builder =
+                new StringBuilder("Could not locate ResponseBody converter for ").append(type)
+                        .append(". Tried:");
+        for (Converter.Factory converterFactory : converterFactories) {
+            builder.append("\n * ").append(converterFactory.getClass().getName());
+        }
+        throw new IllegalArgumentException(builder.toString());
+    }
+
+    /**
+     * Replace a {@link ResponseData} with an identical copy whose body is backed by a
      * {@link Buffer} rather than a {@link Source}.
      */
-    static Response readBodyToBytesIfNecessary(final Response body) throws IOException {
+    static ResponseData readBodyToBytesIfNecessary(final ResponseData body) throws IOException {
         if (body == null) {
             return null;
         }
-
-        return body;
-//        BufferedSource source = body.source();
-//        final Buffer buffer = new Buffer();
-//        buffer.writeAll(source);
-//        source.close();
-//
-//        return ResponseData.create(body.contentType(), body.contentLength(), buffer);
+        return ResponseData.create(body.contentType(), body.bytes());
     }
 
     static <T> void validateServiceClass(Class<T> service) {
@@ -156,12 +210,20 @@ final public class Utils {
     }
 
     static RuntimeException methodError(Method method, String message, Object... args) {
+        return methodError(null, method, message, args);
+    }
+
+    static RuntimeException methodError(Throwable cause, Method method, String message,
+                                        Object... args) {
         message = String.format(message, args);
-        return new IllegalArgumentException(message
+        IllegalArgumentException e = new IllegalArgumentException(message
                 + "\n    for method "
                 + method.getDeclaringClass().getSimpleName()
                 + "."
                 + method.getName());
+        e.initCause(cause);
+        return e;
+
     }
 
     static Type getCallResponseType(Type returnType) {

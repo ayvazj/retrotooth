@@ -17,6 +17,7 @@ package retrotooth;
  */
 
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.concurrent.Executor;
 
@@ -33,19 +34,19 @@ final class ExecutorCallAdapterFactory implements CallAdapter.Factory {
     }
 
     @Override
-    public CallAdapter<?> get(Type returnType) {
+    public CallAdapter<Call<?>> get(Type returnType, Annotation[] annotations) {
         if (Utils.getRawType(returnType) != Call.class) {
             return null;
         }
         final Type responseType = Utils.getCallResponseType(returnType);
-        return new CallAdapter<Object>() {
+        return new CallAdapter<Call<?>>() {
             @Override
             public Type responseType() {
                 return responseType;
             }
 
             @Override
-            public Call<Object> adapt(Call<Object> call) {
+            public <R> Call<R> adapt(Call<R> call) {
                 return new ExecutorCallbackCall<>(callbackExecutor, call);
             }
         };

@@ -3,6 +3,7 @@ package retrotooth;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -18,10 +19,10 @@ final class RequestFactoryParser {
     private static final Pattern PARAM_NAME_REGEX = Pattern.compile(PARAM);
     private static final Pattern PARAM_URL_REGEX = Pattern.compile("\\{(" + PARAM + ")\\}");
 
-    static RequestFactory parse(Method method, Converter.Factory converterFactory) {
+    static RequestFactory parse(Method method, List<Converter.Factory> converterFactories) {
         RequestFactoryParser parser = new RequestFactoryParser(method);
         parser.parseMethodAnnotations();
-        parser.parseParameters(converterFactory);
+        parser.parseParameters(converterFactories);
         return parser.toRequestFactory();
     }
 
@@ -111,7 +112,7 @@ final class RequestFactoryParser {
         this.characteristicUuid = BleUtils.getUUID(write.characteristic());
     }
 
-    private void parseParameters(Converter.Factory converterFactory) {
+    private void parseParameters(List<Converter.Factory> converterFactories) {
         Type[] methodParameterTypes = method.getGenericParameterTypes();
         Annotation[][] methodParameterAnnotationArrays = method.getParameterAnnotations();
 

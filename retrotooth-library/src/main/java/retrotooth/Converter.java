@@ -1,17 +1,28 @@
 package retrotooth;
 
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 
-/** Convert objects to and from their representation as HTTP bodies. */
-public interface Converter<T> {
-    /** Convert a byte array response to a concrete object of the specified type. */
-    T fromResponse(Response<T> data) throws IOException;
 
-    /** Convert an object to an appropriate representation for BLE transport. */
-    RequestData toData(T value);
+public interface Converter<F, T> {
+    T convert(F value) throws IOException;
 
-    interface Factory {
-        Converter<?> get(Type type);
+    abstract class Factory {
+        /**
+         * Create a {@link Converter} for converting an HTTP response body to {@code type} or null if it
+         * cannot be handled by this factory.
+         */
+        public Converter<ResponseData, ?> fromResponseBody(Type type, Annotation[] annotations) {
+            return null;
+        }
+
+        /**
+         * Create a {@link Converter} for converting {@code type} to an HTTP request body or null if it
+         * cannot be handled by this factory.
+         */
+        public Converter<?, RequestData> toRequestBody(Type type, Annotation[] annotations) {
+            return null;
+        }
     }
 }

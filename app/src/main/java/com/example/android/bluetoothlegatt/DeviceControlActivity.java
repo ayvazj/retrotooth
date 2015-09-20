@@ -27,11 +27,13 @@ import android.widget.Toast;
 
 import com.github.ayvazj.retrotooth.sample.R;
 
+import java.io.IOException;
 import java.util.ArrayList;
 
 import retrotooth.Call;
 import retrotooth.Callback;
 import retrotooth.Response;
+import retrotooth.ResponseData;
 import retrotooth.Retrotooth;
 
 /**
@@ -117,11 +119,17 @@ public class DeviceControlActivity extends Activity {
         findViewById(R.id.read).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Call<String> call = service.getBodySensorLocation();
-                call.enqueue(new Callback<String>() {
+                Call<ResponseData> call = service.getBodySensorLocation();
+                call.enqueue(new Callback<ResponseData>() {
                     @Override
-                    public void onResponse(Response<String> response) {
-                        Toast.makeText(DeviceControlActivity.this, "READ onResponse => ", Toast.LENGTH_SHORT).show();
+                    public void onResponse(Response<ResponseData> response) {
+
+                        try {
+                            Toast.makeText(DeviceControlActivity.this, "READ onResponse => " + response.data().string(), Toast.LENGTH_SHORT).show();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+
                     }
 
                     @Override

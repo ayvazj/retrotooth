@@ -10,9 +10,14 @@ import android.content.Context;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+
+import static retrotooth.Utils.checkNotNull;
 
 /**
  * Adapts a Java interface to a Bluetooth API.
@@ -30,19 +35,19 @@ public final class Retrotooth {
     private final BluetoothAdapter bluetoothAdapter;
     private BluetoothGatt client;
     private final BluetoothDevice bluetoothDevice;
-    private final Converter.Factory converterFactory;
-    private final CallAdapter.Factory adapterFactory;
+    private final List<Converter.Factory> converterFactories;
+    private final List<CallAdapter.Factory> adapterFactories;
     private final Executor callbackExecutor;
     private final RetrotoothGattCallback retrotoothGattCallback;
 
-    private Retrotooth(Context context, BluetoothManager bluetoothManager, BluetoothAdapter bluetoothAdapter, BluetoothDevice bluetoothDevice, Converter.Factory converterFactory,
-                       CallAdapter.Factory adapterFactory, Executor callbackExecutor) {
+    private Retrotooth(Context context, BluetoothManager bluetoothManager, BluetoothAdapter bluetoothAdapter, BluetoothDevice bluetoothDevice, List<Converter.Factory> converterFactories,
+                       List<CallAdapter.Factory> adapterFactories, Executor callbackExecutor) {
         this.context = context;
         this.bluetoothManager = bluetoothManager;
         this.bluetoothAdapter = bluetoothAdapter;
         this.bluetoothDevice = bluetoothDevice;
-        this.converterFactory = converterFactory;
-        this.adapterFactory = adapterFactory;
+        this.converterFactories = converterFactories;
+        this.adapterFactories = adapterFactories;
         this.callbackExecutor = callbackExecutor;
         this.retrotoothGattCallback = new RetrotoothGattCallback();
     }
@@ -75,7 +80,7 @@ public final class Retrotooth {
         synchronized (methodHandlerCache) {
             handler = methodHandlerCache.get(method);
             if (handler == null) {
-                handler = MethodHandler.create(method, client, adapterFactory, converterFactory, retrotoothGattCallback);
+                handler = MethodHandler.create(method, client, adapterFactories, converterFactories, retrotoothGattCallback);
                 methodHandlerCache.put(method, handler);
             }
         }
@@ -123,13 +128,14 @@ public final class Retrotooth {
      * <p/>
      * May be null.
      */
-    public Converter.Factory converterFactory() {
-        return converterFactory;
+    public List<Converter.Factory> converterFactories() {
+        return Collections.unmodifiableList(converterFactories);
     }
 
-    public CallAdapter.Factory callAdapterFactory() {
-        return adapterFactory;
+    public List<CallAdapter.Factory> callAdapterFactories() {
+        return Collections.unmodifiableList(adapterFactories);
     }
+
 
     public Executor callbackExecutor() {
         return callbackExecutor;
@@ -148,9 +154,15 @@ public final class Retrotooth {
         private BluetoothAdapter bluetoothAdapter;
         private String bluetoothDeviceAddress;
         private BluetoothDevice bluetoothDevice;
-        private Converter.Factory converterFactory;
-        private CallAdapter.Factory adapterFactory;
+        private List<Converter.Factory> converterFactories = new ArrayList<>();
+        private List<CallAdapter.Factory> adapterFactories = new ArrayList<>();
         private Executor callbackExecutor;
+
+        public Builder() {
+            // Add the built-in converter factory first. This prevents overriding its behavior but also
+            // ensures correct behavior when using converters that consume all types.
+            converterFactories.add(new BuiltInConverterFactory());
+        }
 
         public Builder device(String address) {
             if (bluetoothAdapter == null) {
@@ -171,32 +183,33 @@ public final class Retrotooth {
             if (bluetoothAdapter == null) {
                 throw new NullPointerException("bluetoothAdapter == null");
             }
-            this.bluetoothDevice = Utils.checkNotNull(device, "device == null");
+            this.bluetoothDevice = checkNotNull(device, "device == null");
             return this;
         }
 
         public Builder with(Context context) {
-            this.context = Utils.checkNotNull(context, "context == null");
+            this.context = checkNotNull(context, "context == null");
 
             if (bluetoothManager == null) {
-                bluetoothManager = Utils.checkNotNull((BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE), "bluetoothManager == null");
+                bluetoothManager = checkNotNull((BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE), "bluetoothManager == null");
             }
 
-            bluetoothAdapter = Utils.checkNotNull(bluetoothManager.getAdapter(), "bluetoothAdapter == null");
+            bluetoothAdapter = checkNotNull(bluetoothManager.getAdapter(), "bluetoothAdapter == null");
 
+            return this;
+        }
+
+        /** Add converter factory for serialization and deserialization of objects. */
+        public Builder addConverterFactory(Converter.Factory converterFactory) {
+            converterFactories.add(checkNotNull(converterFactory, "converterFactory == null"));
             return this;
         }
 
         /**
-         * The converter used for serialization and deserialization of objects.
+         * TODO
          */
-        public Builder converterFactory(Converter.Factory converterFactory) {
-            this.converterFactory = Utils.checkNotNull(converterFactory, "converterFactory == null");
-            return this;
-        }
-
-        public Builder callAdapterFactory(CallAdapter.Factory factory) {
-            this.adapterFactory = Utils.checkNotNull(factory, "factory == null");
+        public Builder addCallAdapterFactory(CallAdapter.Factory factory) {
+            adapterFactories.add(checkNotNull(factory, "factory == null"));
             return this;
         }
 
@@ -206,7 +219,7 @@ public final class Retrotooth {
          * your service method.
          */
         public Builder callbackExecutor(Executor callbackExecutor) {
-            this.callbackExecutor = Utils.checkNotNull(callbackExecutor, "callbackExecutor == null");
+            this.callbackExecutor = checkNotNull(callbackExecutor, "callbackExecutor == null");
             return this;
         }
 
@@ -222,15 +235,14 @@ public final class Retrotooth {
                 throw new IllegalStateException("context required.");
             }
 
-            if (adapterFactory == null) {
-                adapterFactory = Platform.get().defaultCallAdapterFactory(callbackExecutor);
-            }
+            // Make a defensive copy of the adapters and add the default Call adapter.
+            List<CallAdapter.Factory> adapterFactories = new ArrayList<>(this.adapterFactories);
+            adapterFactories.add(Platform.get().defaultCallAdapterFactory(callbackExecutor));
 
-            if (converterFactory == null) {
-                converterFactory = new DefaultConverterFactory();
-            }
+            // Make a defensive copy of the converters.
+            List<Converter.Factory> converterFactories = new ArrayList<>(this.converterFactories);
 
-            return new Retrotooth(context, bluetoothManager, bluetoothAdapter, bluetoothDevice, converterFactory, adapterFactory, callbackExecutor);
+            return new Retrotooth(context, bluetoothManager, bluetoothAdapter, bluetoothDevice, converterFactories, adapterFactories, callbackExecutor);
         }
     }
 }

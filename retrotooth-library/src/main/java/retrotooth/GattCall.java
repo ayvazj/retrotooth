@@ -195,7 +195,7 @@ public class GattCall {
                         throw new IllegalStateException("characteristic(" + request.characteristic() + ") not found on service(" + request.service() + ")");
                     }
                     gatt.setCharacteristicNotification(characteristic, true);
-                    characteristic.setValue(new byte[] { 0x03 });
+                    characteristic.setValue(new byte[] { 0x04 });
                     gatt.writeCharacteristic(characteristic);
                 }
             }
